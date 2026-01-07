@@ -26,6 +26,17 @@ app.get('/users', async(req, res)=>{
     }
 })
 
+//get all items
+app.get('/items', async(req,res)=>{
+    try{
+        const {rows}= await pool.query('select * from items'); 
+        res.json(rows); 
+    }
+    catch(err){
+        res.status(500).json({error: err.message})
+    }
+})
+
 
 
 const PORT= process.env.PORT || 5000; 
