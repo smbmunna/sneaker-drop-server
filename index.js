@@ -46,7 +46,7 @@ app.post('/reserve/:item_code', async (req,res)=>{
         //getting item from items table with lock
         const itemResult= await pool.query(`select item_code, stock from items where item_code=$1 FOR UPDATE`, [item_code]); 
 
-        if(itemResult.rowCount ===0 ){
+        if(itemResult.rowCount ===0 ){  
             await pool.query('ROLLBACK'); 
             return res.status(404).json({message: "Item not found!"}); 
         }
@@ -69,6 +69,40 @@ app.post('/reserve/:item_code', async (req,res)=>{
 
         res.status(200).json({message: `${foundItem.item_code} Item reserved for 60 seconds.`}); 
     }catch(err){
+        await pool.query('ROLLBACK'); 
+        res.status(500).json({error: err.message}); 
+    }
+})
+
+//purchase an item
+app.post('/purchase/:item_code',async (req,res)=>{
+    try{
+        const {item_code}= req.params; 
+        await pool.query('BEGIN'); 
+        const itemResult= await pool.query('select item_code from reservations where item_code= $1 FOR UPDATE', [item_code]); 
+
+        if(itemResult.rowCount===0){
+            await pool.query('ROLLBACK'); 
+            return res.status(404).json({message: "Item not found"}); 
+        }
+
+        const foundItem =itemResult.rows[0]; 
+
+        //increase purchase_count by 1 and update is_reserved status
+        await pool.query('update items set purchase_count=purchase_count + 1, is_reserved= FALSE where item_code=$1', [foundItem.item_code]); 
+
+        //insert into the purchase table
+        await pool.query('insert into purchases (item_code) values ($1)', [foundItem.item_code]); 
+
+        //delete from reservations table
+        await pool.query('delete from reservations where item_code=$1', [foundItem.item_code]); 
+
+        await pool.query('COMMIT'); 
+
+        res.status(200).json({message: `${foundItem.item_code} Item purchased successfully.`}); 
+
+    }
+    catch(err){
         await pool.query('ROLLBACK'); 
         res.status(500).json({error: err.message}); 
     }
