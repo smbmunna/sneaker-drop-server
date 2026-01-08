@@ -59,7 +59,7 @@ app.post('/reserve/:item_code', async (req,res)=>{
         }
 
         //decrease stock
-        await pool.query(`update items set stock=stock-1 where item_code=$1`, [foundItem.item_code]); 
+        await pool.query(`update items set stock=stock-1, is_reserved=TRUE where item_code=$1`, [foundItem.item_code]); 
 
         //insert into reservations table
         await pool.query(`insert into reservations (item_code, expires_at) values ($1, NOW() + INTERVAL '60 seconds' ) `, [foundItem.item_code]); 
