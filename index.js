@@ -59,13 +59,13 @@ app.post('/reserve/:item_code', async (req,res)=>{
         }
 
         //decrease stock
-        pool.query(`update items set stock=stock-1 where item_code=$1`, [foundItem.item_code]); 
+        await pool.query(`update items set stock=stock-1 where item_code=$1`, [foundItem.item_code]); 
 
         //insert into reservations table
-        pool.query(`insert into reservations (item_code, expires_at) values ($1, NOw() + INTERVAL '60 seconds' ) `, [foundItem.item_code]); 
+        await pool.query(`insert into reservations (item_code, expires_at) values ($1, NOW() + INTERVAL '60 seconds' ) `, [foundItem.item_code]); 
 
         // all done now commit
-        pool.query('COMMIT'); 
+        await pool.query('COMMIT'); 
 
         res.status(200).json({message: `${foundItem.item_code} Item reserved for 60 seconds.`}); 
     }catch(err){
