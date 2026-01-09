@@ -5,7 +5,14 @@ const pool = require('./db');
 
 
 const app = express();
-app.use(cors());
+app.use(cors({
+    origin: [
+        'http://localhost:5173',
+        'https://sneaker-drop-client.vercel.app'
+
+    ],
+    credentials: true
+}));
 app.use(express.json());
 
 
@@ -38,73 +45,73 @@ app.get('/items', async (req, res) => {
 })
 
 //reserve an item
-app.post('/reserve/:item_code', async (req,res)=>{
-    try{
-        const {item_code}= req.params; 
-        await pool.query('BEGIN'); 
+app.post('/reserve/:item_code', async (req, res) => {
+    try {
+        const { item_code } = req.params;
+        await pool.query('BEGIN');
 
         //getting item from items table with lock
-        const itemResult= await pool.query(`select item_code, stock from items where item_code=$1 FOR UPDATE`, [item_code]); 
+        const itemResult = await pool.query(`select item_code, stock from items where item_code=$1 FOR UPDATE`, [item_code]);
 
-        if(itemResult.rowCount ===0 ){  
-            await pool.query('ROLLBACK'); 
-            return res.status(404).json({message: "Item not found!"}); 
+        if (itemResult.rowCount === 0) {
+            await pool.query('ROLLBACK');
+            return res.status(404).json({ message: "Item not found!" });
         }
 
-        const foundItem= itemResult.rows[0]; 
+        const foundItem = itemResult.rows[0];
 
-        if(foundItem.stock<=0){
-            await pool.query('ROLLBACK'); 
-            return res.status(400).json({message: "Out of stock!"}); 
+        if (foundItem.stock <= 0) {
+            await pool.query('ROLLBACK');
+            return res.status(400).json({ message: "Out of stock!" });
         }
 
         //decrease stock
-        await pool.query(`update items set stock=stock-1, is_reserved=TRUE where item_code=$1`, [foundItem.item_code]); 
+        await pool.query(`update items set stock=stock-1, is_reserved=TRUE where item_code=$1`, [foundItem.item_code]);
 
         //insert into reservations table
-        await pool.query(`insert into reservations (item_code, expires_at) values ($1, NOW() + INTERVAL '60 seconds' ) `, [foundItem.item_code]); 
+        await pool.query(`insert into reservations (item_code, expires_at) values ($1, NOW() + INTERVAL '60 seconds' ) `, [foundItem.item_code]);
 
         // all done now commit
-        await pool.query('COMMIT'); 
+        await pool.query('COMMIT');
 
-        res.status(200).json({message: `${foundItem.item_code} Item reserved for 60 seconds.`}); 
-    }catch(err){
-        await pool.query('ROLLBACK'); 
-        res.status(500).json({error: err.message}); 
+        res.status(200).json({ message: `${foundItem.item_code} Item reserved for 60 seconds.` });
+    } catch (err) {
+        await pool.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
     }
 })
 
 //purchase an item
-app.post('/purchase/:item_code',async (req,res)=>{
-    try{
-        const {item_code}= req.params; 
-        await pool.query('BEGIN'); 
-        const itemResult= await pool.query('select item_code from reservations where item_code= $1 FOR UPDATE', [item_code]); 
+app.post('/purchase/:item_code', async (req, res) => {
+    try {
+        const { item_code } = req.params;
+        await pool.query('BEGIN');
+        const itemResult = await pool.query('select item_code from reservations where item_code= $1 FOR UPDATE', [item_code]);
 
-        if(itemResult.rowCount===0){
-            await pool.query('ROLLBACK'); 
-            return res.status(404).json({message: "Item not found"}); 
+        if (itemResult.rowCount === 0) {
+            await pool.query('ROLLBACK');
+            return res.status(404).json({ message: "Item not found" });
         }
 
-        const foundItem =itemResult.rows[0]; 
+        const foundItem = itemResult.rows[0];
 
         //increase purchase_count by 1 and update is_reserved status
-        await pool.query('update items set purchase_count=purchase_count + 1, is_reserved= FALSE where item_code=$1', [foundItem.item_code]); 
+        await pool.query('update items set purchase_count=purchase_count + 1, is_reserved= FALSE where item_code=$1', [foundItem.item_code]);
 
         //insert into the purchase table
-        await pool.query('insert into purchases (item_code) values ($1)', [foundItem.item_code]); 
+        await pool.query('insert into purchases (item_code) values ($1)', [foundItem.item_code]);
 
         //delete from reservations table
-        await pool.query('delete from reservations where item_code=$1', [foundItem.item_code]); 
+        await pool.query('delete from reservations where item_code=$1', [foundItem.item_code]);
 
-        await pool.query('COMMIT'); 
+        await pool.query('COMMIT');
 
-        res.status(200).json({message: `${foundItem.item_code} Item purchased successfully.`}); 
+        res.status(200).json({ message: `${foundItem.item_code} Item purchased successfully.` });
 
     }
-    catch(err){
-        await pool.query('ROLLBACK'); 
-        res.status(500).json({error: err.message}); 
+    catch (err) {
+        await pool.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
     }
 })
 
