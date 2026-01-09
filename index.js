@@ -35,8 +35,23 @@ app.get('/users', async (req, res) => {
     }
 })
 
-//get all items
+//get available items from merch drops
 app.get('/items', async (req, res) => {
+    try {
+        const { rows } = await pool.query(
+            `SELECT i.*, d.available_stock
+                FROM items i
+                JOIN drops d ON d.item_code = i.item_code
+                --WHERE d.starts_at <= NOW(); `);
+        res.json(rows);
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message })
+    }
+})
+
+//get all products
+app.get('/allItems', async (req, res) => {
     try {
         const { rows } = await pool.query('select * from items');
         res.json(rows);
@@ -118,7 +133,7 @@ app.post('/purchase/:item_code', async (req, res) => {
 })
 
 //merch drop
-app.post('/drops', async (req, res) => {    
+app.post('/drops', async (req, res) => {
     const { item_code, total_stock, starts_at } = req.body;
     try {
         await pool.query('BEGIN');
@@ -140,6 +155,26 @@ app.post('/drops', async (req, res) => {
     }
     catch (err) {
         await pool.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    }
+})
+
+//insert user purchase in user table
+app.post('/userPurchase', async (req, res) => {
+    const { name, email } = req.body;
+
+    try {
+        //finding if user already exists
+        const existingUser = await pool.query('SELECT email FROM users WHERE email = $1', [email]);
+        if (existingUser.rowCount > 0) {
+            await pool.query('UPDATE users SET purchase_count = purchase_count + 1 WHERE email = $1', [email]);
+        } else {
+            await pool.query('INSERT INTO users (name, email, purchase_count) VALUES ($1, $2, 1)', [name, email]);
+        }
+
+        res.status(200).json({ message: 'Purchase inserted' });
+    }
+    catch (err) {
         res.status(500).json({ error: err.message });
     }
 })
